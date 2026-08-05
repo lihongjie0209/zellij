@@ -1,0 +1,50 @@
+name: Build Linux x64 artifact
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux-x64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install musl tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends musl-tools
+
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: x86_64-unknown-linux-musl,wasm32-wasip1
+          rustflags: ""
+
+      - name: Build release binary
+        run: cargo xtask ci cross x86_64-unknown-linux-musl
+
+      - name: Package artifact
+        run: |
+          cp target/x86_64-unknown-linux-musl/release/zellij zellij
+          chmod 755 zellij
+          sha256sum zellij > zellij.sha256sum
+          git rev-parse HEAD > source-commit.txt
+          tar -czf zellij-x86_64-unknown-linux-musl.tar.gz zellij zellij.sha256sum source-commit.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zellij-x86_64-unknown-linux-musl
+          path: |
+            zellij-x86_64-unknown-linux-musl.tar.gz
+            zellij.sha256sum
+            source-commit.txt
+          if-no-files-found: error
+          retention-days: 14
